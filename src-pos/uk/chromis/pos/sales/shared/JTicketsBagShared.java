@@ -380,15 +380,68 @@ public class JTicketsBagShared extends JTicketsBag {
     }
 
     public void newTicket() {
-        saveCurrentTicket();
-        pickupBarcode = new StringBuilder();
-        TicketInfo ticket = new TicketInfo();
-        ticket.setTicketOwner(m_App.getAppUserView().getUser().getId());
-        m_sCurrentTicket = UUID.randomUUID().toString();
-        m_panelticket.setActiveTicket(ticket, null);
-        pickupBarcode.append("P").append(ticket.getId().substring(24));
+
+    // Guardamos una referencia al ticket actual ANTES de crear
+    // el nuevo ticket vacío.
+    TicketInfo ticketToPrint = m_panelticket.getActiveTicket();
+
+    // Solo imprimimos automáticamente cuando:
+    // 1. Está habilitado Pickup para Layaway.
+    // 2. Existe un ticket activo.
+    // 3. El ticket contiene productos.
+    // 4. Todavía no tenía Pickup ID.
+    //
+    // Esto evita reimprimir una preventa antigua cada vez
+    // que Chromis vuelve a guardar el ticket.
+    boolean printLayaway =
+            SystemProperty.USEPICKUPFORLAYAWAY
+            && ticketToPrint != null
+            && ticketToPrint.getArticlesCount() > 0
+            && ticketToPrint.getPickupId() == 0;
+
+    // Guarda la venta pendiente.
+    //
+    // Dentro de saveCurrentTicket(), Chromis:
+    // - asigna el Pickup ID
+    // - guarda los productos
+    // - genera el pickupbarcode real Pxxxxxxxxxxxx
+    // - inserta todo en sharedtickets
+    saveCurrentTicket();
+
+    // Imprime EXACTAMENTE el mismo ticket que acabamos
+    // de guardar, antes de crear el ticket nuevo vacío.
+    if (printLayaway
+            && ticketToPrint != null
+            && ticketToPrint.getPickupId() > 0) {
+
+        panelTicket.printTicket(
+                "Printer.Layaway",
+                ticketToPrint,
+                null,
+                false
+        );
     }
 
+    // Ahora sí se crea una venta nueva y vacía.
+    pickupBarcode = new StringBuilder();
+
+    TicketInfo ticket = new TicketInfo();
+
+    ticket.setTicketOwner(
+            m_App.getAppUserView().getUser().getId()
+    );
+
+    m_sCurrentTicket = UUID.randomUUID().toString();
+
+    m_panelticket.setActiveTicket(
+            ticket,
+            null
+    );
+
+    pickupBarcode
+            .append("P")
+            .append(ticket.getId().substring(24));
+}
     @Override
     public void getTicketByCode(String id) {
         saveCurrentTicket();
